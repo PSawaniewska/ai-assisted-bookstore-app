@@ -21,12 +21,8 @@ Tables:
 - books(id, title, authors, genre, publisher, year). authors is a comma-separated, alphabetically sorted list; one distinct value = one author set.
 - users(id, person_id, name, address, phone, email). One real person can have several user ids (aliases, changed address, phone or e-mail); person_id groups them. Questions about users, customers or buyers are about real people: group by person_id (e.g. orders per person, spending per person). When you name a customer, give their name and all their user ids, e.g. "Cyril Hegmann (user ids: [48403, 48904, 50056])" (list(DISTINCT id ORDER BY id), list(DISTINCT name)); if the person used several names, mention all of them. Never mention person_id or "person N", it is internal.
 - orders(id, user_id, book_id, quantity, unit_price, paid_price, timestamp, date). Prices are in USD, already converted and deduplicated. Revenue = SUM(paid_price).
-- person_names(name): first and last names of all customers.
 
-To find people's names in titles: get candidates with
-WITH words AS (SELECT id, title, unnest(regexp_split_to_array(title, '[^\\p{{L}}]+')) AS word FROM books) SELECT DISTINCT id, title FROM words JOIN person_names ON name = word
-and pass that query to classify_rows with the criterion: "the title names a specific person or character (e.g. Lawrence of Arabia, Donnie Darko, Max Payne, Life of Brian).
-Words that are names only by coincidence do not count: Will as a verb, Sun, Star, King, Green, Princess as a title"
+For books with people's names in the title, call show_books_with_names: it finds and checks them and filters the Explorer itself.
 
 For any filter that needs understanding of text (names, animals, places, ...), call classify_rows with a query returning id and the text
 (narrow it with SQL first when you can), then call show_table with WHERE id IN (...) using exactly the kept_ids it returns.
@@ -38,6 +34,16 @@ Call reset_table to show all rows again,
 and select_store to switch stores ({stores}).
 
 Always answer in the language of the user's last message (a question in Polish gets a Polish answer). Keep it brief. Dates as YYYY-MM-DD, money as $1,234.56. If a question cannot be answered from these tables, say so."""
+
+SQL_TABLES = ("books", "users", "orders")
+NAME_CANDIDATES = """
+    WITH words AS (SELECT id, title, unnest(regexp_split_to_array(title, '[^\\p{L}]+')) AS word FROM books)
+    SELECT DISTINCT id, title FROM words JOIN person_names ON name = word ORDER BY id
+"""
+NAME_CRITERION = (
+    "the title names a specific person or character (e.g. Lawrence of Arabia, Donnie Darko, Max Payne, Life of Brian). "
+    "Words that are names only by coincidence do not count: Will as a verb, Sun, Star, King, Green, Princess as a title."
+)
 
 CLASSIFY_PROMPT = """For each item decide whether it matches this criterion: {criterion}
 Items are [id, text]. Check every item. Reply only with JSON: {{"ids": [ids of the matching items]}}"""
@@ -89,6 +95,14 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "show_books_with_names",
+            "description": "Filter the Explorer to books whose titles contain people's names.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "reset_table",
             "description": "Remove the filter from the Explorer table.",
             "parameters": {"type": "object", "properties": {}},
@@ -109,15 +123,15 @@ TOOLS = [
 ]
 
 
-def run_sql(tables, query):
+def run_sql(tables, query, names=SQL_TABLES):
     query = query.strip().rstrip(";")
     # one read-only statement; the data lives in memory, so nothing outside the app can be reached or changed
     if ";" in query or not re.match(r"(?is)(select|with)\b", query):
         raise ValueError("Only a single SELECT query is allowed.")
 
     con = duckdb.connect(config={"enable_external_access": False})
-    for name, df in tables.items():
-        con.register(name, df)
+    for name in names:
+        con.register(name, tables[name])
     return con.execute(query).df()
 
 
@@ -164,6 +178,14 @@ def call_tool(client, name, args, tables, stores, actions):
         df = run_sql(tables, args["query"])
         actions.append({"view": {"table": args["table"], "query": args["query"], "title": args["title"]}})
         return {"shown_rows": len(df)}
+    if name == "show_books_with_names":
+        # every step runs in code, so the model cannot skip the check and show raw candidates
+        candidates = run_sql(tables, NAME_CANDIDATES, names=tables.keys())
+        rows = [[int(row.id), row.title] for row in candidates.itertuples(index=False)]
+        kept = classify(client, rows, NAME_CRITERION)
+        query = f"SELECT * FROM books WHERE id IN ({', '.join(map(str, kept)) or 'NULL'})"
+        actions.append({"view": {"table": "books", "query": query, "title": "Books with people's names in the title"}})
+        return {"candidates_checked": len(rows), "shown_rows": len(kept)}
     if name == "reset_table":
         actions.append({"view": None})
         return {"status": "ok"}
