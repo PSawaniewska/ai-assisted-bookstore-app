@@ -59,13 +59,18 @@ def load_books(store_dir):
         books = pd.DataFrame(yaml.safe_load(f))
     books.columns = [col.lstrip(":") for col in books.columns]
     books["authors"] = books["author"].apply(to_author_set)
+    # some years are empty or "-"
+    books["year"] = pd.to_numeric(books["year"], errors="coerce").astype("Int64")
     return books
 
 
-def find_people(store_dir):
+def load_users(store_dir):
     users = pd.read_csv(f"{store_dir}/users.csv")
     users["phone"] = users["phone"].str.replace(r"\D", "", regex=True)
+    return users
 
+
+def find_people(users):
     # the same person changes only one field, so two rows matching on 3 of 4 fields are one person
     fields = ["name", "address", "phone", "email"]
     graph = nx.Graph()
@@ -78,10 +83,36 @@ def find_people(store_dir):
     return list(nx.connected_components(graph))
 
 
+def person_names(users):
+    # first and last names of all customers, used to spot people's names in book titles
+    words = users["name"].str.split().explode()
+    # "The" comes from the title "The Hon.", not from a name
+    words = words[words.str.fullmatch(r"[A-Z][a-z]{2,}") & (words != "The")]
+    return pd.DataFrame({"name": sorted(words.unique())})
+
+
+def load_tables(store_dir):
+    books = load_books(store_dir)
+    users = load_users(store_dir)
+    orders = load_orders(store_dir)
+
+    person_of = {user_id: i for i, group in enumerate(find_people(users)) for user_id in group}
+    users["person_id"] = users["id"].map(person_of)
+    books["authors"] = books["authors"].apply(lambda names: ", ".join(sorted(names)))
+    orders["date"] = orders["date"].dt.date
+
+    return {
+        "books": books[["id", "title", "authors", "genre", "publisher", "year"]],
+        "users": users[["id", "person_id", "name", "address", "phone", "email"]],
+        "orders": orders[["id", "user_id", "book_id", "quantity", "unit_price", "paid_price", "timestamp", "date"]],
+        "person_names": person_names(users),
+    }
+
+
 def process_store(store_dir):
     orders = load_orders(store_dir)
     books = load_books(store_dir)
-    people = find_people(store_dir)
+    people = find_people(load_users(store_dir))
 
     daily_revenue = orders.groupby("date")["paid_price"].sum().round(2)
     top5_days = daily_revenue.sort_values(ascending=False).head(5)
