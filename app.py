@@ -47,11 +47,11 @@ STYLE = """
 </style>
 """
 
-# fixed widths keep every table within the dashboard, so it never scrolls sideways
+# small base widths: the table stretches them to fill wider screens, so it never scrolls sideways
 COLUMN_WIDTHS = {
-    "id": 60, "user_id": 70, "book_id": 70, "year": 55, "quantity": 45, "unit_price": 80, "paid_price": 70,
-    "title": 190, "authors": 210, "genre": 150, "publisher": 170,
-    "name": 160, "address": 270, "phone": 110, "email": 220, "timestamp": 160, "date": 95,
+    "id": 45, "user_id": 55, "book_id": 55, "year": 45, "quantity": 35, "unit_price": 60, "paid_price": 55,
+    "title": 120, "authors": 135, "genre": 95, "publisher": 110,
+    "name": 100, "address": 170, "phone": 80, "email": 150, "timestamp": 120, "date": 75,
 }
 
 st.set_page_config(page_title="Quill & Page", page_icon=":material/auto_stories:", layout="wide")
