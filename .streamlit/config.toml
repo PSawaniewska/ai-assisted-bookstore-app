@@ -1,6 +1,22 @@
 [theme]
-base = "dark"
-primaryColor = "#4FC3F7"
-backgroundColor = "#0E1117"
-secondaryBackgroundColor = "#1A1F2B"
-textColor = "#FAFAFA"
+base = "light"
+primaryColor = "#7A2E2E"
+backgroundColor = "#FAF6EE"
+secondaryBackgroundColor = "#F1E9DA"
+textColor = "#3B2F2A"
+borderColor = "#E2D6C2"
+redColor = "#7A2E2E"
+greenColor = "#2F5D50"
+font = "Source Sans 3:https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600&display=swap, sans-serif"
+headingFont = "Lora:https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&display=swap, serif"
+baseRadius = "medium"
+dataframeHeaderBackgroundColor = "#EDE3D1"
+chartCategoricalColors = ["#7A2E2E", "#2F5D50", "#B08D57", "#8C6A5D", "#5B7F8C"]
+showSidebarBorder = false
+
+[theme.sidebar]
+backgroundColor = "#24443B"
+secondaryBackgroundColor = "#2F5D50"
+textColor = "#F5EFE3"
+primaryColor = "#E3C58A"
+borderColor = "#3C6B5D"
