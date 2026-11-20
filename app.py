@@ -17,8 +17,8 @@ BRANCH_DIRS = {name: path for path, name in BRANCHES.items()}
 WELCOME = """Hi! I'm the data assistant for this bookstore. Ask me about sales, customers or books, in any language. Try:"""
 EXAMPLES = [
     "Who is the best buyer?",
-    "Which genre sold the most copies?",
-    "Show books with an animal in the title",
+    "Który oddział ma największy przychód?",
+    "Show users with e-mails starting with s or p",
 ]
 WELCOME_NOTE = "Answers can take a moment, as I check everything in the data."
 

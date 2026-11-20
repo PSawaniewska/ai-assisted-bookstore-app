@@ -12,7 +12,7 @@ MAX_CHARS = 4000
 MAX_STEPS = 8
 MAX_HISTORY = 6
 MAX_CLASSIFY_ROWS = 800
-CLASSIFY_BATCH = 150
+CLASSIFY_BATCH = 100
 
 SYSTEM_PROMPT = """You are the data assistant of the Quill & Page bookstore dashboard. The current branch is {store}.
 Never guess numbers: get every fact from the data with the run_sql tool (DuckDB SQL, SELECT only).
@@ -52,7 +52,8 @@ NAME_CRITERION = (
 )
 
 CLASSIFY_PROMPT = """For each item decide whether it matches this criterion: {criterion}
-Items are [id, text]. Check every item. Reply only with JSON: {{"ids": [ids of the matching items]}}"""
+Items are [id, text]. Check every item.
+Reply only with the ids of the matching items, separated by commas, or with the word NONE if no item matches."""
 
 TOOLS = [
     {
@@ -162,11 +163,18 @@ def classify(client, rows, criterion):
             {"role": "system", "content": CLASSIFY_PROMPT.format(criterion=criterion)},
             {"role": "user", "content": json.dumps(batch, ensure_ascii=False)},
         ]
-        reply = complete(client, messages, tools=None, effort="medium", json_mode=True)
-        ids = json.loads(reply.choices[0].message.content).get("ids", [])
-        # only ids that were really in the batch are kept, so invented ids cannot get through
-        valid = {row[0] for row in batch}
-        kept += [item for item in ids if item in valid]
+        for attempt in range(2):
+            text = complete(client, messages, tools=None, effort="medium").choices[0].message.content or ""
+            # an empty reply means the model failed, not that nothing matched, so it is asked again
+            if text.strip():
+                break
+        if not text.strip():
+            raise RuntimeError("The model returned no answer while checking the rows. Try again.")
+        # every number in the reply is read, and only ids from this batch are kept, so invented ids cannot get through
+        found = {int(number) for number in re.findall(r"\d+", text)}
+        matches = [row[0] for row in batch if row[0] in found]
+        print(f"Classify rows {start}-{start + len(batch)}: {len(matches)} matched, reply: {text[:120]!r}")
+        kept += matches
     return kept
 
 
